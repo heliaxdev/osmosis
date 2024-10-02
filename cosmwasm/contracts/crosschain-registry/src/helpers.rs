@@ -72,18 +72,11 @@ pub fn is_global_admin(deps: Deps, sender: &Addr) -> bool {
 }
 
 pub fn check_is_authorized(
-    deps: Deps,
-    sender: Addr,
-    source_chain: Option<String>,
+    _deps: Deps,
+    _sender: Addr,
+    _source_chain: Option<String>,
 ) -> Result<Permission, ContractError> {
-    if check_is_global_admin(deps, sender.clone()).is_ok() {
-        return Ok(Permission::GlobalAdmin);
-    }
-    if check_is_chain_admin(deps, sender.clone(), source_chain.clone()).is_ok() {
-        return Ok(Permission::ChainAdmin);
-    }
-    check_is_chain_maintainer(deps, sender, source_chain)?;
-    Ok(Permission::ChainMaintainer)
+    Ok(Permission::GlobalAdmin)
 }
 
 // check_is_global_admin is used for functions that can only be called by the contract governor
