@@ -118,6 +118,8 @@ pub fn unwrap_or_swap_and_forward(
     }
 
     // If the denom is either native or only one hop, we swap it directly
+    deps.api
+        .debug(&format!("swap_and_forward being called now"));
     swap_and_forward(
         (deps, env, info),
         swap_coin,
@@ -235,6 +237,7 @@ fn save_forward_reply_state(
     // Store the ibc send information and the user's failed delivery preference
     // so that it can be handled by the response
     FORWARD_REPLY_STATE.save(deps.storage, &forward_reply_state)?;
+    deps.api.debug("BONG");
     Ok(())
 }
 
@@ -282,6 +285,7 @@ pub fn handle_swap_reply(
             &ibc_transfer,
         ));
 
+    deps.api.debug("BING");
     // Ensure the state is properly setup to handle a reply from the ibc_message
     save_forward_reply_state(
         deps,
