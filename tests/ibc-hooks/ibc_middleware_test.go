@@ -749,10 +749,18 @@ func (suite *HooksTestSuite) SetupPools(chainName Chain, multipliers []osmomath.
 }
 
 func (suite *HooksTestSuite) SetupCrosschainSwaps(chainName Chain, setupForwarding bool) (sdk.AccAddress, sdk.AccAddress) {
+	return suite.SetupCrosschainSwapsWithWasmBaseDir(
+		"./bytecode",
+		chainName,
+		setupForwarding,
+	)
+}
+
+func (suite *HooksTestSuite) SetupCrosschainSwapsWithWasmBaseDir(wasmBaseDir string, chainName Chain, setupForwarding bool) (sdk.AccAddress, sdk.AccAddress) {
 	chain := suite.GetChain(chainName)
 	owner := chain.SenderAccount.GetAddress()
 
-	registryAddr, _, _, _ := suite.SetupCrosschainRegistry(chainName)
+	registryAddr, _, _, _ := suite.SetupCrosschainRegistryWithWasmBaseDir(wasmBaseDir, chainName)
 	suite.setChainChannelLinks(registryAddr, chainName)
 	suite.setAllPrefixesToOsmo(registryAddr, chainName)
 	if setupForwarding {
@@ -772,10 +780,10 @@ func (suite *HooksTestSuite) SetupCrosschainSwaps(chainName Chain, setupForwardi
 	suite.SetupPools(chainName, []osmomath.Dec{osmomath.NewDec(20), osmomath.NewDec(20)})
 
 	// Setup contract
-	chain.StoreContractCode(&suite.Suite, "./bytecode/swaprouter.wasm")
+	chain.StoreContractCode(&suite.Suite, fmt.Sprintf("%s/swaprouter.wasm", wasmBaseDir))
 	swaprouterAddr := chain.InstantiateContract(&suite.Suite,
 		fmt.Sprintf(`{"owner": "%s"}`, owner), 2)
-	chain.StoreContractCode(&suite.Suite, "./bytecode/crosschain_swaps.wasm")
+	chain.StoreContractCode(&suite.Suite, fmt.Sprintf("%s/crosschain_swaps.wasm", wasmBaseDir))
 
 	crosschainAddr := chain.InstantiateContract(&suite.Suite,
 		fmt.Sprintf(`{"swap_contract": "%s", "governor": "%s", "registry_contract":"%s"}`, swaprouterAddr, owner, registryAddr),
@@ -815,6 +823,10 @@ func (suite *HooksTestSuite) fundAccount(chain *osmosisibctesting.TestChain, own
 }
 
 func (suite *HooksTestSuite) SetupCrosschainRegistry(chainName Chain) (sdk.AccAddress, string, string, string) {
+	return suite.SetupCrosschainRegistryWithWasmBaseDir("./bytecode", chainName)
+}
+
+func (suite *HooksTestSuite) SetupCrosschainRegistryWithWasmBaseDir(wasmBaseDir string, chainName Chain) (sdk.AccAddress, string, string, string) {
 	chain := suite.GetChain(chainName)
 	owner := chain.SenderAccount.GetAddress()
 
@@ -827,7 +839,7 @@ func (suite *HooksTestSuite) SetupCrosschainRegistry(chainName Chain) (sdk.AccAd
 	suite.SetupPools(chainName, []osmomath.Dec{osmomath.NewDec(20), osmomath.NewDec(20)})
 
 	// Setup contract
-	chain.StoreContractCode(&suite.Suite, "./bytecode/crosschain_registry.wasm")
+	chain.StoreContractCode(&suite.Suite, fmt.Sprintf("%s/crosschain_registry.wasm", wasmBaseDir))
 	registryAddr := chain.InstantiateContract(&suite.Suite, fmt.Sprintf(`{"owner": "%s"}`, owner), 1)
 	_, err := sdk.Bech32ifyAddressBytes("osmo", registryAddr)
 	suite.Require().NoError(err)
