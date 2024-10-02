@@ -1678,6 +1678,105 @@ type ChainActorDefinition struct {
 	address sdk.AccAddress
 }
 
+func (suite *HooksTestSuite) TestBingBong() {
+	suite.T().Log("bing bong m8888")
+	accountB := suite.chainB.SenderAccount.GetAddress()
+
+	swapRouterAddr, crosschainAddr := suite.SetupCrosschainSwapsWithWasmBaseDir("../../cosmwasm/artifacts", ChainA, true)
+
+	sendAmount := osmomath.NewInt(100)
+
+	actorChainB := ChainActorDefinition{
+		Chain:   ChainB,
+		name:    "chainB",
+		address: accountB,
+	}
+
+	var customRoute string
+
+	tc := struct {
+		name              string
+		sender            ChainActorDefinition
+		swapFor           string
+		receiver          ChainActorDefinition
+		receivedToken     string
+		setupInitialToken func() string
+		relayChain        []Direction
+		requireAck        []bool
+	}{
+		name:          "C's token0 in B wrapped as B.C, send to A for unwrapping and then swap for A's token0, receive into B",
+		sender:        actorChainB,
+		swapFor:       "token0",
+		receiver:      actorChainB,
+		receivedToken: suite.GetIBCDenom(ChainA, ChainB, "token0"),
+		setupInitialToken: func() string {
+			suite.SimpleNativeTransfer("token0", osmomath.NewInt(defaultPoolAmount), []Chain{ChainC, ChainA})
+
+			denom := suite.GetIBCDenom(ChainC, ChainA, "token0")
+			poolId := suite.CreateIBCNativePoolOnChain(ChainA, denom)
+			suite.SetupIBCRouteOnChain(swapRouterAddr, suite.chainA.SenderAccount.GetAddress(), poolId, ChainA, denom)
+
+			return suite.SimpleNativeTransfer("token0", sendAmount, []Chain{ChainC, ChainB})
+		},
+		relayChain: []Direction{AtoB, BtoC, CtoA, AtoB},
+		requireAck: []bool{false, false, true, true},
+	}
+
+	suite.Run(tc.name, func() {
+		senderChain := suite.GetChain(tc.sender.Chain)
+		receiverChain := suite.GetChain(tc.receiver.Chain)
+		customRoute = "" // reset the custom route
+
+		initialToken := tc.setupInitialToken()
+
+		// Check that the balances are correct
+		// check sender balance
+		sentTokenBalance := senderChain.GetOsmosisApp().BankKeeper.GetBalance(senderChain.GetContext(), tc.sender.address, initialToken)
+		fmt.Println("sentTokenBalance", sentTokenBalance)
+		suite.Require().True(sentTokenBalance.Amount.GTE(sendAmount))
+		// get receiver balance
+		receivedTokenBalance := receiverChain.GetOsmosisApp().BankKeeper.GetBalance(receiverChain.GetContext(), tc.receiver.address, tc.receivedToken)
+
+		// Generate swap instructions for the contract
+		var extra string
+		if customRoute != "" {
+			extra = fmt.Sprintf(`,"route": %s`, customRoute)
+		}
+
+		swapMsg := fmt.Sprintf(`{"osmosis_swap":{"output_denom":"%s","slippage":{"twap": {"window_seconds": 1, "slippage_percentage":"20"}},"receiver":"%s/%s", "on_failed_delivery": "do_nothing", "next_memo":{}%s}}`,
+			tc.swapFor, tc.receiver.name, tc.receiver.address, extra,
+		)
+		// Generate full memo
+		msg := fmt.Sprintf(`{"wasm": {"contract": "%s", "msg": %s } }`, crosschainAddr, swapMsg)
+		// Send IBC transfer with the memo with crosschain-swap instructions
+		transferMsg := NewMsgTransfer(sdk.NewCoin(initialToken, sendAmount), tc.sender.address.String(), crosschainAddr.String(), suite.GetSenderChannel(tc.sender.Chain, ChainA), msg)
+		_, res, _, err := suite.FullSend(transferMsg, BtoA)
+		// We use the receive result here because the receive adds another packet to be sent back
+		suite.Require().NoError(err)
+		suite.Require().NotNil(res)
+
+		var ack []byte
+		for i, direction := range tc.relayChain {
+			packet, err := ibctesting.ParsePacketFromEvents(res.GetEvents())
+			suite.Require().NoError(err)
+			if tc.requireAck[i] {
+				res, ack = suite.RelayPacket(packet, direction)
+				suite.Require().Contains(string(ack), "result")
+			} else {
+				res = suite.RelayPacketNoAck(packet, direction)
+			}
+		}
+
+		sentTokenAfter := senderChain.GetOsmosisApp().BankKeeper.GetBalance(senderChain.GetContext(), tc.sender.address, initialToken)
+		suite.Require().Equal(sendAmount.Int64(), sentTokenBalance.Amount.Sub(sentTokenAfter.Amount).Int64())
+
+		fmt.Println(receiverChain.GetOsmosisApp().BankKeeper.GetAllBalances(receiverChain.GetContext(), tc.receiver.address))
+
+		receivedTokenAfter := receiverChain.GetOsmosisApp().BankKeeper.GetBalance(receiverChain.GetContext(), tc.receiver.address, tc.receivedToken)
+		suite.Require().True(receivedTokenAfter.Amount.GT(receivedTokenBalance.Amount))
+	})
+}
+
 func (suite *HooksTestSuite) TestMultiHopXCS() {
 	accountB := suite.chainB.SenderAccount.GetAddress()
 
