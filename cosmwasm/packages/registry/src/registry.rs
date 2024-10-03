@@ -1,5 +1,5 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Coin, Deps, DepsMut, Timestamp};
+use cosmwasm_std::{Coin, Deps, Timestamp};
 use itertools::Itertools;
 use sha2::Digest;
 use sha2::Sha256;
@@ -327,21 +327,20 @@ impl<'a> Registry<'a> {
         }
 
         // Get the denom trace
-        /*let res = proto::QueryDenomTraceRequest {
+        let res = proto::QueryDenomTraceRequest {
             hash: denom.to_string(),
         }
         .query(&self.deps.querier)
         .map_err(|_| RegistryError::InvalidDenomTrace {
             error: format!("Cannot find denom trace for {denom}"),
-        })?;*/
-        let base_denom = "uusdc".to_string();
-        let path = "transfer/channel-750".to_string();
-        /*let proto::DenomTrace { path, base_denom } = match res.denom_trace {
+        })?;
+
+        let proto::DenomTrace { path, base_denom } = match res.denom_trace {
             Some(denom_trace) => Ok(denom_trace),
             None => Err(RegistryError::NoDenomTrace {
                 denom: denom.into(),
             }),
-        }?;*/
+        }?;
 
         self.debug(format!("procesing denom trace {path}"));
         // Let's iterate over the parts of the denom trace and extract the
@@ -441,7 +440,6 @@ impl<'a> Registry<'a> {
         // Define useful variables
         let current_chain = path[0].on.clone();
         let first_channel = path[0].via.clone();
-        let source_channel = self.get_channel(into_chain.unwrap(), current_chain.0.as_ref()).unwrap();
 
         let coin_type = if path.len() == 1 {
             CoinType::Native
@@ -495,9 +493,8 @@ impl<'a> Registry<'a> {
             CoinType::Ibc => path[1].on.as_ref(), // Non native coins always have a path of len > 1 per definition
         };
 
-
         // encode the receiver address for the first chain
-        let first_receiver = self.encode_addr_for_chain(&receiver_addr, receiver_chain)?;
+        let first_receiver = self.encode_addr_for_chain(&receiver_addr, first_transfer_chain)?;
         let first_channel = match first_channel {
             Some(channel) => Ok::<String, RegistryError>(channel.as_ref().to_string()),
             None => {
@@ -517,13 +514,13 @@ impl<'a> Registry<'a> {
 
         // initialize mutable variables for the iteration
         let mut next: Option<Box<Memo>> = None;
-        //let mut prev_chain: &str = receiver_chain;
+        let mut prev_chain: &str = receiver_chain;
         let mut callback = receiver_callback; // The last call should have the receiver callback
 
         // Note that we iterate in reverse order. This is because the structure
         // is nested and we build it from the inside out. We want the last hop
         // to be the innermost memo.
-        /*for hop in path_iter.rev() {
+        for hop in path_iter.rev() {
             self.debug(format!("processing hop: {hop:?}"));
             // If the last hop is the same as the receiver chain, we don't need
             // to forward anymore. The via.is_none() check is important because
@@ -573,7 +570,7 @@ impl<'a> Registry<'a> {
             }));
             prev_chain = hop.on.as_ref();
             callback = None;
-        }*/
+        }
 
         // If no memo was generated, we still want to include the user provided
         // callback. This is not necessary if next.is_some() because the
@@ -591,7 +588,7 @@ impl<'a> Registry<'a> {
         // If the user provided a memo to be included in the transfer, we merge
         // it with the calculated one. By using the provided memo as a base,
         // only its forward key would be overwritten if it existed
-        // let memo = merge_json(&first_transfer_memo, &forward)?;
+        let memo = merge_json(&first_transfer_memo, &forward)?;
         let ts = block_time.plus_seconds(PACKET_LIFETIME);
 
         // Cosmwasm's IBCMsg::Transfer  does not support memo.
@@ -599,13 +596,13 @@ impl<'a> Registry<'a> {
         // See https://github.com/CosmWasm/cosmwasm/issues/1477
         let ibc_transfer_msg = proto::MsgTransfer {
             source_port: TRANSFER_PORT.to_string(),
-            source_channel,
+            source_channel: first_channel,
             token: Some(coin.into()),
             sender: own_addr,
             receiver: first_receiver,
             timeout_height: None,
             timeout_timestamp: Some(ts.nanos()),
-            memo: "{}".to_string(),
+            memo,
         };
 
         self.debug(format!("MsgTransfer: {ibc_transfer_msg:?}"));
