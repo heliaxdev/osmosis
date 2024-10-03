@@ -48,6 +48,7 @@ pub fn execute_swap(
     // callback. They share the same name because that's the name we want to
     // expose to the user
     let instruction = crosschain_swaps::ExecuteMsg::OsmosisSwap {
+        forward: true,
         output_denom,
         receiver,
         slippage,

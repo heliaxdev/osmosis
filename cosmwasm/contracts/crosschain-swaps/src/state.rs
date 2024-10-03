@@ -19,6 +19,7 @@ pub struct ForwardTo {
     pub receiver: Addr,
     pub next_memo: Option<SerializableJson>,
     pub on_failed_delivery: FailedDeliveryAction,
+    pub forward: bool,
 }
 
 #[cw_serde]

@@ -94,6 +94,7 @@ pub fn execute(
                 with_memo,
                 None,
                 false,
+                true,
             )?;
             deps.api.debug(&format!("transfer_msg: {transfer_msg:?}"));
             Ok(Response::new()

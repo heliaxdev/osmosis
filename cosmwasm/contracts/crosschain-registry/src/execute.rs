@@ -136,6 +136,7 @@ pub fn propose_pfm(
             msg: format!(r#"{{"validate_pfm": {{"chain": "{chain}"}} }}"#).try_into()?,
         }),
         true,
+        true,
     )?;
 
     Ok(Response::default().add_message(ibc_transfer))

@@ -39,11 +39,18 @@ pub enum FailedDeliveryAction {
     // },
 }
 
+fn forward_default() -> bool {
+    true
+}
+
 /// message type for `execute` entry_point
 #[cw_serde]
 pub enum ExecuteMsg {
     /// Execute a swap and forward it to the receiver address on the specified ibc channel
     OsmosisSwap {
+        /// Whether to unwrap tokens by default
+        #[serde(default = "forward_default")]
+        forward: bool,
         /// The final denom to be received (as represented on osmosis)
         output_denom: String,
         /// The receiver of the IBC packet to be sent after the swap

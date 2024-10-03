@@ -42,6 +42,7 @@ pub fn unwrap_or_swap_and_forward(
     next_memo: Option<SerializableJson>,
     failed_delivery_action: FailedDeliveryAction,
     route: Option<Vec<SwapAmountInRoute>>,
+    forward: bool,
 ) -> Result<Response, ContractError> {
     let (deps, env, info) = ctx;
     let swap_coin = cw_utils::one_coin(&info)?;
@@ -64,7 +65,7 @@ pub fn unwrap_or_swap_and_forward(
     let amount: u128 = swap_coin.amount.into();
 
     // If the path is larger than 2, we need to unwrap this token first
-    if path.len() > 2 {
+    if forward && path.len() > 2 {
         let registry = get_registry(deps.as_ref())?;
         let ibc_transfer = registry.unwrap_coin_into(
             swap_coin,
@@ -76,6 +77,7 @@ pub fn unwrap_or_swap_and_forward(
             Some(Callback {
                 contract: env.contract.address.clone(),
                 msg: serde_cw_value::to_value(&ExecuteMsg::OsmosisSwap {
+                    forward: true,
                     output_denom,
                     receiver: receiver.to_string(),
                     slippage,
@@ -86,6 +88,7 @@ pub fn unwrap_or_swap_and_forward(
                 .into(),
             }),
             false,
+            true,
         )?;
 
         // Ensure the state is properly setup to handle a reply from the ibc_message
@@ -129,6 +132,7 @@ pub fn unwrap_or_swap_and_forward(
         next_memo,
         failed_delivery_action,
         route,
+        forward,
     )
 }
 
@@ -146,6 +150,7 @@ pub fn swap_and_forward(
     next_memo: Option<SerializableJson>,
     failed_delivery_action: FailedDeliveryAction,
     route: Option<Vec<SwapAmountInRoute>>,
+    forward: bool,
 ) -> Result<Response, ContractError> {
     let (deps, env, _) = ctx;
 
@@ -177,6 +182,7 @@ pub fn swap_and_forward(
         memo,
         None,
         false,
+        forward,
     )?;
 
     // Message to swap tokens in the underlying swaprouter contract
@@ -211,6 +217,7 @@ pub fn swap_and_forward(
                 receiver: valid_receiver,
                 next_memo,
                 on_failed_delivery: failed_delivery_action,
+                forward,
             },
         },
     )?;
@@ -274,6 +281,7 @@ pub fn handle_swap_reply(
         memo,
         None,
         false,
+        swap_msg_state.forward_to.forward,
     )?;
     deps.api.debug(&format!("IBC transfer: {ibc_transfer:?}"));
 
@@ -318,7 +326,9 @@ pub fn handle_forward_reply(
     deps.api.debug(&format!("handle_forward_reply"));
     // Parse the result from the underlying chain call (IBC send)
     let SubMsgResult::Ok(SubMsgResponse { data: Some(b), .. }) = msg.result else {
-        return Err(ContractError::FailedIBCTransfer { msg: format!("failed reply: {:?}", msg.result) })
+        return Err(ContractError::FailedIBCTransfer {
+            msg: format!("failed reply: {:?}", msg.result),
+        });
     };
 
     // The response contains the packet sequence. This is needed to be able to

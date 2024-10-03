@@ -55,6 +55,7 @@ pub fn execute(
     // IBC transfers support only one token at a time
     match msg {
         ExecuteMsg::OsmosisSwap {
+            forward,
             output_denom,
             receiver,
             slippage,
@@ -69,6 +70,7 @@ pub fn execute(
             next_memo,
             on_failed_delivery,
             route,
+            forward,
         ),
         ExecuteMsg::Recover {} => execute::recover(deps, info.sender),
         ExecuteMsg::TransferOwnership { new_governor } => {

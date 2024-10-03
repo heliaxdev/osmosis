@@ -351,7 +351,10 @@ impl<'a> Registry<'a> {
 
         for chunk in &parts.chunks(2) {
             let Some((port, channel)) = chunk.take(2).collect_tuple() else {
-                return Err(RegistryError::InvalidDenomTracePath{ path: path.clone(), denom: denom.into() });
+                return Err(RegistryError::InvalidDenomTracePath {
+                    path: path.clone(),
+                    denom: denom.into(),
+                });
             };
 
             // Check that the port is "transfer"
@@ -421,6 +424,7 @@ impl<'a> Registry<'a> {
         first_transfer_memo: String,
         receiver_callback: Option<Callback>,
         skip_forwarding_check: bool,
+        forward: bool,
     ) -> Result<proto::MsgTransfer, RegistryError> {
         // Calculate the path that this coin took to get to the current chain.
         // Each element in the path is an IBC hop.
@@ -508,6 +512,48 @@ impl<'a> Registry<'a> {
         }?;
 
         // Generate the memo with the forwarding chain.
+        let ts = block_time.plus_seconds(PACKET_LIFETIME);
+
+        // Cosmwasm's IBCMsg::Transfer  does not support memo.
+        // To build and send the packet properly, we need to send it using stargate messages.
+        // See https://github.com/CosmWasm/cosmwasm/issues/1477
+        let ibc_transfer_msg = proto::MsgTransfer {
+            source_port: TRANSFER_PORT.to_string(),
+            source_channel: first_channel,
+            token: Some(coin.into()),
+            sender: own_addr,
+            receiver: first_receiver,
+            timeout_height: None,
+            timeout_timestamp: Some(ts.nanos()),
+            memo: self.generate_forwarding_memo(
+                forward,
+                first_transfer_memo,
+                &path,
+                receiver_chain,
+                receiver_callback,
+                skip_forwarding_check,
+                receiver_addr,
+            )?,
+        };
+
+        self.debug(format!("MsgTransfer: {ibc_transfer_msg:?}"));
+
+        Ok(ibc_transfer_msg)
+    }
+
+    fn generate_forwarding_memo(
+        &self,
+        forward: bool,
+        first_transfer_memo: String,
+        path: &[MultiHopDenom],
+        receiver_chain: &str,
+        receiver_callback: Option<Callback>,
+        skip_forwarding_check: bool,
+        receiver_addr: String,
+    ) -> Result<String, RegistryError> {
+        if !forward {
+            return Ok(first_transfer_memo);
+        }
 
         // remove the first hop from the path as it is the current chain
         let path_iter = path.iter().skip(1);
@@ -588,26 +634,7 @@ impl<'a> Registry<'a> {
         // If the user provided a memo to be included in the transfer, we merge
         // it with the calculated one. By using the provided memo as a base,
         // only its forward key would be overwritten if it existed
-        let memo = merge_json(&first_transfer_memo, &forward)?;
-        let ts = block_time.plus_seconds(PACKET_LIFETIME);
-
-        // Cosmwasm's IBCMsg::Transfer  does not support memo.
-        // To build and send the packet properly, we need to send it using stargate messages.
-        // See https://github.com/CosmWasm/cosmwasm/issues/1477
-        let ibc_transfer_msg = proto::MsgTransfer {
-            source_port: TRANSFER_PORT.to_string(),
-            source_channel: first_channel,
-            token: Some(coin.into()),
-            sender: own_addr,
-            receiver: first_receiver,
-            timeout_height: None,
-            timeout_timestamp: Some(ts.nanos()),
-            memo,
-        };
-
-        self.debug(format!("MsgTransfer: {ibc_transfer_msg:?}"));
-
-        Ok(ibc_transfer_msg)
+        merge_json(&first_transfer_memo, &forward)
     }
 }
 
