@@ -25,6 +25,7 @@ pub fn instantiate(
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    deps.api.debug("swaprouter instantiate invoked");
     // set contract version
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
@@ -44,6 +45,7 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
+    deps.api.debug("swaprouter execute invoked");
     match msg {
         ExecuteMsg::SetRoute {
             input_denom,
@@ -62,6 +64,7 @@ pub fn execute(
 
 #[cfg_attr(not(feature = "imported"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    deps.api.debug("swaprouter query invoked");
     match msg {
         QueryMsg::GetOwner {} => to_binary(&query_owner(deps)?),
         QueryMsg::GetRoute {
@@ -73,6 +76,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 #[cfg_attr(not(feature = "imported"), entry_point)]
 pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> Result<Response, ContractError> {
+    deps.api.debug("swaprouter reply invoked");
     deps.api
         .debug(&format!("executing swaprouter reply: {msg:?}"));
     if msg.id == SWAP_REPLY_ID {

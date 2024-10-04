@@ -26,6 +26,7 @@ pub fn instantiate(
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    deps.api.debug("crosschain registry instantiate invoked");
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     // validate owner address and save to state
@@ -53,6 +54,7 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
+    deps.api.debug("crosschain registry execute invoked");
     match msg {
         ExecuteMsg::ModifyDenomAlias { operations } => {
             execute::denom_alias_operations(deps, info.sender, operations)
@@ -112,6 +114,7 @@ pub fn execute(
 
 #[cfg_attr(not(feature = "imported"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    deps.api.debug("crosschain registry query invoked");
     deps.api.debug(&format!("executing query: {msg:?}"));
     match msg {
         QueryMsg::GetAddressFromAlias { contract_alias } => {
@@ -162,6 +165,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 #[cfg_attr(not(feature = "imported"), entry_point)]
 pub fn sudo(deps: DepsMut, env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
+    deps.api.debug("crosschain registry sudo invoked");
     let own_addr = env.contract.address.to_string();
     match msg {
         SudoMsg::IBCLifecycleComplete(IBCLifecycleComplete::IBCAck {

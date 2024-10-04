@@ -552,8 +552,11 @@ impl<'a> Registry<'a> {
         receiver_addr: String,
     ) -> Result<String, RegistryError> {
         if !forward {
+            self.debug("skipping forward".to_owned());
             return Ok(first_transfer_memo);
         }
+
+        self.debug(format!("generating a forwarding memo. receiver_chain={receiver_chain}, receiver_addr={receiver_addr}, path={path:?}"));
 
         // remove the first hop from the path as it is the current chain
         let path_iter = path.iter().skip(1);

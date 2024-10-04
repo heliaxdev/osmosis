@@ -47,8 +47,9 @@ pub fn unwrap_or_swap_and_forward(
     let (deps, env, info) = ctx;
     let swap_coin = cw_utils::one_coin(&info)?;
 
-    deps.api
-        .debug(&format!("executing unwrap or swap and forward"));
+    deps.api.debug(&format!(
+        "executing unwrap or swap and forward (unwrap tokens? {forward})"
+    ));
     let registry = get_registry(deps.as_ref())?;
 
     // Check the path that the coin took to get to the current chain.

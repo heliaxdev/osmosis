@@ -23,6 +23,7 @@ pub fn instantiate(
     _info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    deps.api.debug("crosschain swaps instantiate invoked");
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
     // validate swaprouter contract and owner addresses and save to config
@@ -40,7 +41,8 @@ pub fn instantiate(
 }
 
 #[cfg_attr(not(feature = "imported"), entry_point)]
-pub fn migrate(_deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
+pub fn migrate(deps: DepsMut, _env: Env, msg: MigrateMsg) -> Result<Response, ContractError> {
+    deps.api.debug("crosschain swaps migrate invoked");
     match msg {}
 }
 
@@ -52,6 +54,7 @@ pub fn execute(
     info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
+    deps.api.debug("crosschain swaps execute invoked");
     // IBC transfers support only one token at a time
     match msg {
         ExecuteMsg::OsmosisSwap {
@@ -85,6 +88,7 @@ pub fn execute(
 /// Handling contract queries
 #[cfg_attr(not(feature = "imported"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+    deps.api.debug("crosschain swaps query invoked");
     match msg {
         QueryMsg::Recoverable { addr } => to_binary(
             &RECOVERY_STATES
@@ -96,6 +100,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 
 #[cfg_attr(not(feature = "imported"), entry_point)]
 pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, ContractError> {
+    deps.api.debug("crosschain swaps sudo invoked");
     match msg {
         SudoMsg::IBCLifecycleComplete(IBCLifecycleComplete::IBCAck {
             channel,
@@ -111,6 +116,7 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> Result<Response, Contract
 
 #[cfg_attr(not(feature = "imported"), entry_point)]
 pub fn reply(deps: DepsMut, env: Env, reply: Reply) -> Result<Response, ContractError> {
+    deps.api.debug("crosschain swaps reply invoked");
     deps.api
         .debug(&format!("executing crosschain reply: {reply:?}"));
     match MsgReplyID::from_repr(reply.id) {
