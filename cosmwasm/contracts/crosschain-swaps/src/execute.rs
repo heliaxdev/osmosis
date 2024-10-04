@@ -155,7 +155,10 @@ pub fn swap_and_forward(
 ) -> Result<Response, ContractError> {
     let (deps, env, _) = ctx;
 
-    deps.api.debug(&format!("executing swap and forward"));
+    deps.api.debug(&format!(
+        "executing swap and forward. swap_coin={swap_coin:?}, output_denom={output_denom}, \
+             receiver={receiver}, forward={forward}, swap_route={route:?}, slippage={slippage:?}",
+    ));
     let config = CONFIG.load(deps.storage)?;
 
     // Check that the received is valid and retrieve its channel
