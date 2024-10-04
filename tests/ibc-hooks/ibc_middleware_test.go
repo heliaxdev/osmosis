@@ -18,6 +18,7 @@ import (
 
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 
+	//"cosmossdk.io/math"
 	"github.com/osmosis-labs/osmosis/osmomath"
 	"github.com/osmosis-labs/osmosis/osmoutils"
 	"github.com/osmosis-labs/osmosis/v26/x/gamm/pool-models/balancer"
@@ -1398,7 +1399,7 @@ func (suite *HooksTestSuite) CreateIBCPoolOnChain(chainName Chain, denom1, denom
 	}
 	defaultBarAsset := balancer.PoolAsset{
 		Weight: osmomath.NewInt(100),
-		Token:  sdk.NewCoin(denom2, osmomath.NewInt(defaultPoolAmount)),
+		Token:  sdk.NewCoin(denom2, osmomath.NewInt(/*defaultPoolAmount*/2000)),
 	}
 
 	poolAssets := []balancer.PoolAsset{defaultFooAsset, defaultBarAsset}
@@ -1421,9 +1422,10 @@ func (suite *HooksTestSuite) CreateIBCNativePoolOnChain(chainName Chain, denom s
 	bondDenom, err := chain.GetOsmosisApp().StakingKeeper.BondDenom(chain.GetContext())
 	suite.Require().NoError(err)
 
-	multiplier := osmomath.NewDec(20)
+	//multiplier := osmomath.NewDec(20)
 
-	uosmoAmount := gammtypes.InitPoolSharesSupply.ToLegacyDec().Mul(multiplier).RoundInt()
+	//uosmoAmount := gammtypes.InitPoolSharesSupply.ToLegacyDec().Mul(multiplier).RoundInt()
+	uosmoAmount := osmomath.NewInt(1000)
 
 	return suite.CreateIBCPoolOnChain(chainName, bondDenom, denom, uosmoAmount)
 }
@@ -1674,6 +1676,18 @@ func (suite *HooksTestSuite) GetIBCDenom(a Chain, b Chain, denom string) string 
 	return transfertypes.DenomTrace{Path: suite.GetPath(a, b), BaseDenom: denom}.IBCDenom()
 }
 
+func (suite *HooksTestSuite) GetIBCDenomWithTrace(denom string, trace1, trace2 Chain, remainingTrace ...Chain) string {
+	trace := []Chain{trace1, trace2}
+	trace = append(trace, remainingTrace...)
+	pathSoFar := make([]string, 0, len(trace) - 1)
+	for i := len(trace) - 2; i >= 0; i-- {
+		a := trace[i]
+		b := trace[i + 1]
+		pathSoFar = append(pathSoFar, suite.GetPath(a, b))
+	}
+	return transfertypes.DenomTrace{Path: strings.Join(pathSoFar, "/"), BaseDenom: denom}.IBCDenom()
+}
+
 type ChainActorDefinition struct {
 	Chain
 	name    string
@@ -1710,22 +1724,47 @@ func (suite *HooksTestSuite) TestBingBong() {
 		relayChain        []Direction
 		requireAck        []bool
 	}{
-		name:          "C's token0 in B wrapped as B.C, send to A for unwrapping and then swap for A's token0, receive into B",
+		//name:          "C's token0 in B wrapped as B.C, send to A for unwrapping and then swap for A's token0, receive into B",
+		//name:          "A(Osmosis) receives tokens from C(Noble), then B(Housefire) receives tokens from C(Noble) wrapped in A(Osmosis)",
+		name:          "bruv",
 		sender:        actorChainB,
-		swapFor:       "token0",
+		swapFor:       suite.GetIBCDenomWithTrace("token0", ChainC, ChainA),
 		receiver:      actorChainB,
-		receivedToken: suite.GetIBCDenom(ChainA, ChainB, "token0"),
+		receivedToken: suite.GetIBCDenomWithTrace("token0", ChainC, ChainA, ChainB),
 		setupInitialToken: func() string {
-			suite.SimpleNativeTransfer("token0", osmomath.NewInt(defaultPoolAmount), []Chain{ChainC, ChainA})
+			//suite.SimpleNativeTransfer("token0", osmomath.NewInt(defaultPoolAmount), []Chain{ChainC, ChainA})
+			suite.SimpleNativeTransfer("token0", osmomath.NewInt(5000), []Chain{ChainC, ChainA})
+			//suite.SimpleNativeTransfer("token0", osmomath.NewInt(100), []Chain{ChainC, ChainA, ChainB})
 
-			denom := suite.GetIBCDenom(ChainC, ChainA, "token0")
-			poolId := suite.CreateIBCNativePoolOnChain(ChainA, denom)
-			suite.SetupIBCRouteOnChain(swapRouterAddr, suite.chainA.SenderAccount.GetAddress(), poolId, ChainA, denom)
+			//denom := suite.GetIBCDenom(ChainC, ChainA, "token0")
+			denom := suite.GetIBCDenomWithTrace("token0", ChainC, ChainA)
+			//denom := "ibc/41A858B471F2D8806E3D13F40539F5725EC2F7EE3B73DE2372EC95C87A1DFA81"
+			//poolId := suite.CreateIBCNativePoolOnChain(ChainA, denom)
+			poolId := suite.CreateIBCPoolOnChain(ChainA, appparams.BaseCoinUnit, denom, osmomath.NewInt(5000))
+			//suite.SetupIBCRouteOnChain(swapRouterAddr, suite.chainA.SenderAccount.GetAddress(), poolId, ChainA, denom)
+			suite.SetupIBCSimpleRouteOnChain(
+				swapRouterAddr,
+				suite.chainA.SenderAccount.GetAddress(),
+				poolId,
+				ChainA,
+				appparams.BaseCoinUnit,
+				denom,
+			)
 
-			return suite.SimpleNativeTransfer("token0", sendAmount, []Chain{ChainC, ChainB})
+			//return suite.SimpleNativeTransfer("token0", sendAmount, []Chain{ChainC, ChainB})
+			//return "token1"
+
+			// osmo wrapped in housefire
+			return suite.SimpleNativeTransfer(appparams.BaseCoinUnit, sendAmount, []Chain{ChainA, ChainB})
 		},
-		relayChain: []Direction{AtoB, BtoC, CtoA, AtoB},
-		requireAck: []bool{false, false, true, true},
+		//relayChain: []Direction{AtoB, BtoC, CtoA, AtoB},
+		//requireAck: []bool{false, false, true, true},
+		//relayChain: []Direction{AtoB, BtoA},
+		//requireAck: []bool{true, true},
+		relayChain: []Direction{BtoA},
+		requireAck: []bool{true},
+		//relayChain: []Direction{},
+		//requireAck: []bool{},
 	}
 
 	suite.Run(tc.name, func() {
@@ -1761,6 +1800,8 @@ func (suite *HooksTestSuite) TestBingBong() {
 		suite.Require().NoError(err)
 		suite.Require().NotNil(res)
 
+		suite.T().Log("Relaying packets...")
+
 		var ack []byte
 		for i, direction := range tc.relayChain {
 			packet, err := ibctesting.ParsePacketFromEvents(res.GetEvents())
@@ -1773,12 +1814,20 @@ func (suite *HooksTestSuite) TestBingBong() {
 			}
 		}
 
-		sentTokenAfter := senderChain.GetOsmosisApp().BankKeeper.GetBalance(senderChain.GetContext(), tc.sender.address, initialToken)
-		suite.Require().Equal(sendAmount.Int64(), sentTokenBalance.Amount.Sub(sentTokenAfter.Amount).Int64())
-
 		fmt.Println(receiverChain.GetOsmosisApp().BankKeeper.GetAllBalances(receiverChain.GetContext(), tc.receiver.address))
 
+		sentTokenAfter := senderChain.GetOsmosisApp().BankKeeper.GetBalance(senderChain.GetContext(), tc.sender.address, initialToken)
 		receivedTokenAfter := receiverChain.GetOsmosisApp().BankKeeper.GetBalance(receiverChain.GetContext(), tc.receiver.address, tc.receivedToken)
+
+		suite.T().Logf(
+			"Packets relayed. sentTokenBalance=%s, sentTokenAfter=%s, receivedTokenBalance=%s, receivedTokenAfter=%s",
+			sentTokenBalance,
+			sentTokenAfter,
+			receivedTokenBalance,
+			receivedTokenAfter,
+		)
+
+		suite.Require().Equal(sendAmount.Int64(), sentTokenBalance.Amount.Sub(sentTokenAfter.Amount).Int64())
 		suite.Require().True(receivedTokenAfter.Amount.GT(receivedTokenBalance.Amount))
 	})
 }

@@ -76,14 +76,14 @@ pub fn trade_with_slippage_limit(
         } => calculate_min_output_from_twap(
             deps.as_ref(),
             input_token.clone(),
-            output_denom,
+            output_denom.clone(),
             env.block.time,
             window_seconds,
             slippage_percentage,
             route.clone(),
         )?,
         Slippage::MinOutputAmount(minimum_output_amount) => {
-            coin(minimum_output_amount.u128(), output_denom)
+            coin(minimum_output_amount.u128(), output_denom.clone())
         }
     };
 
@@ -91,9 +91,9 @@ pub fn trade_with_slippage_limit(
     let swap_msg = generate_swap_msg(
         deps.as_ref(),
         env.contract.address,
-        input_token,
+        input_token.clone(),
         min_output_token,
-        route,
+        route.clone(),
     )?;
 
     // save intermediate state for reply
@@ -105,6 +105,11 @@ pub fn trade_with_slippage_limit(
             swap_msg: swap_msg.clone(),
         },
     )?;
+
+    deps.api.debug(&format!(
+        "swap succeeded. input_token={input_token:?}, \
+            output_denom={output_denom}, route={route:?}"
+    ));
 
     Ok(Response::new()
         .add_attribute("action", "trade_with_slippage_limit")
