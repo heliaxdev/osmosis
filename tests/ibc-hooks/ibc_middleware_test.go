@@ -1333,6 +1333,8 @@ func (suite *HooksTestSuite) TestCrosschainSwapsViaIBCBadSwap() {
 }
 
 func (suite *HooksTestSuite) TestBadCrosschainSwapsNextMemoMessages() {
+	suite.T().Log("WHY IS THIS RUNNING")
+
 	initializer := suite.chainB.SenderAccount.GetAddress()
 	_, crosschainAddr := suite.SetupCrosschainSwaps(ChainA, true)
 	// Send some token0 tokens to B so that there are ibc tokens to send to A and crosschain-swap
@@ -1679,10 +1681,14 @@ type ChainActorDefinition struct {
 }
 
 func (suite *HooksTestSuite) TestBingBong() {
+	// A => osmosis
+	// B => housefire
+	// C => noble
+
 	suite.T().Log("bing bong m8888")
 	accountB := suite.chainB.SenderAccount.GetAddress()
 
-	swapRouterAddr, crosschainAddr := suite.SetupCrosschainSwapsWithWasmBaseDir("../../cosmwasm/artifacts", ChainA, true)
+	swapRouterAddr, crosschainAddr := suite.SetupCrosschainSwapsWithWasmBaseDir("../../cosmwasm/artifacts", ChainA, false)
 
 	sendAmount := osmomath.NewInt(100)
 
@@ -1743,7 +1749,7 @@ func (suite *HooksTestSuite) TestBingBong() {
 			extra = fmt.Sprintf(`,"route": %s`, customRoute)
 		}
 
-		swapMsg := fmt.Sprintf(`{"osmosis_swap":{"output_denom":"%s","slippage":{"twap": {"window_seconds": 1, "slippage_percentage":"20"}},"receiver":"%s/%s", "on_failed_delivery": "do_nothing", "next_memo":{}%s}}`,
+		swapMsg := fmt.Sprintf(`{"osmosis_swap":{"output_denom":"%s","slippage":{"twap": {"window_seconds": 1, "slippage_percentage":"20"}},"receiver":"%s/%s", "on_failed_delivery": "do_nothing", "forward": false, "next_memo":{}%s}}`,
 			tc.swapFor, tc.receiver.name, tc.receiver.address, extra,
 		)
 		// Generate full memo
