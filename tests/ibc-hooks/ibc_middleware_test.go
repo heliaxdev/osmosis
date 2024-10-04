@@ -1761,7 +1761,7 @@ func (suite *HooksTestSuite) TestBingBong() {
 		//requireAck: []bool{false, false, true, true},
 		//relayChain: []Direction{AtoB, BtoA},
 		//requireAck: []bool{true, true},
-		relayChain: []Direction{BtoA},
+		relayChain: []Direction{AtoB},
 		requireAck: []bool{true},
 		//relayChain: []Direction{},
 		//requireAck: []bool{},
@@ -1791,6 +1791,8 @@ func (suite *HooksTestSuite) TestBingBong() {
 		swapMsg := fmt.Sprintf(`{"osmosis_swap":{"output_denom":"%s","slippage":{"twap": {"window_seconds": 1, "slippage_percentage":"20"}},"receiver":"%s/%s", "on_failed_delivery": "do_nothing", "forward": false, "next_memo":{}%s}}`,
 			tc.swapFor, tc.receiver.name, tc.receiver.address, extra,
 		)
+
+		uusdcBalanceBefore := suite.GetChain(ChainA).GetOsmosisApp().BankKeeper.GetBalance(suite.GetChain(ChainA).GetContext(), crosschainAddr, tc.swapFor)
 		// Generate full memo
 		msg := fmt.Sprintf(`{"wasm": {"contract": "%s", "msg": %s } }`, crosschainAddr, swapMsg)
 		// Send IBC transfer with the memo with crosschain-swap instructions
@@ -1800,7 +1802,15 @@ func (suite *HooksTestSuite) TestBingBong() {
 		suite.Require().NoError(err)
 		suite.Require().NotNil(res)
 
+		if suite.GetSenderChannel(ChainA, ChainB) != suite.GetReceiverChannel(ChainB, ChainA) {
+			panic("oops")
+		}
+
+		uusdcBalanceAfter := suite.GetChain(ChainA).GetOsmosisApp().BankKeeper.GetBalance(suite.GetChain(ChainA).GetContext(), crosschainAddr, tc.swapFor)
+		suite.T().Logf("UUSDC balance before=%s after=%s", uusdcBalanceBefore, uusdcBalanceAfter)
+
 		suite.T().Log("Relaying packets...")
+		suite.T().Logf("Sending channel (A->B) = %s", suite.GetSenderChannel(ChainA, ChainB))
 
 		var ack []byte
 		for i, direction := range tc.relayChain {
