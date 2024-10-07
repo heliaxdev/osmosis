@@ -382,6 +382,7 @@ impl<'a> Registry<'a> {
             via: None,
         });
 
+        self.debug(format!("unwrap path: {hops:?}"));
         Ok(hops)
     }
 
@@ -428,7 +429,22 @@ impl<'a> Registry<'a> {
     ) -> Result<proto::MsgTransfer, RegistryError> {
         // Calculate the path that this coin took to get to the current chain.
         // Each element in the path is an IBC hop.
-        let path: Vec<MultiHopDenom> = self.unwrap_denom_path(&coin.denom)?;
+        let path: Vec<MultiHopDenom> = if forward {
+            self.unwrap_denom_path(&coin.denom)?
+        } else {
+            vec![MultiHopDenom {
+                // NB: this can assume any value, we won't read it
+                local_denom: String::new(),
+                on: Chain(CONTRACT_CHAIN.to_owned()),
+                via: Some(
+                    self.get_channel(
+                        into_chain.expect("dest chain must be available"),
+                        CONTRACT_CHAIN,
+                    )
+                    .map(ChannelId)?,
+                ),
+            }]
+        };
         self.deps
             .api
             .debug(&format!("Generating unwrap transfer message for: {path:?}"));
@@ -445,7 +461,7 @@ impl<'a> Registry<'a> {
         let current_chain = path[0].on.clone();
         let first_channel = path[0].via.clone();
 
-        let coin_type = if path.len() == 1 {
+        let coin_type = if path.len() == 1 && path[0].via.is_none() {
             CoinType::Native
         } else {
             CoinType::Ibc
@@ -494,7 +510,8 @@ impl<'a> Registry<'a> {
         // it from
         let first_transfer_chain = match coin_type {
             CoinType::Native => receiver_chain,
-            CoinType::Ibc => path[1].on.as_ref(), // Non native coins always have a path of len > 1 per definition
+            CoinType::Ibc if path.len() == 1 && path[0].via.is_some() => receiver_chain,
+            CoinType::Ibc => path[1].on.as_ref(),
         };
 
         // encode the receiver address for the first chain

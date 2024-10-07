@@ -1700,7 +1700,10 @@ func (suite *HooksTestSuite) GetIBCDenomWithTrace(denom string, trace1, trace2 C
 		b := trace[i + 1]
 		pathSoFar = append(pathSoFar, suite.GetPath(a, b))
 	}
-	return transfertypes.DenomTrace{Path: strings.Join(pathSoFar, "/"), BaseDenom: denom}.IBCDenom()
+	denomTrace := transfertypes.DenomTrace{Path: strings.Join(pathSoFar, "/"), BaseDenom: denom}
+	ibcDenomTrace := denomTrace.IBCDenom()
+	suite.T().Logf("GetIBCDenomWithTrace(%s, %#v) = %#v = %s", denom, trace, denomTrace, ibcDenomTrace)
+	return ibcDenomTrace
 }
 
 type ChainActorDefinition struct {
@@ -1747,9 +1750,41 @@ func (suite *HooksTestSuite) TestBingBong() {
 		receiver:      actorChainB,
 		receivedToken: suite.GetIBCDenomWithTrace("token0", ChainC, ChainA, ChainB),
 		setupInitialToken: func() string {
+			uusdcBalanceBefore := suite.
+				GetChain(ChainA).
+				GetOsmosisApp().
+				BankKeeper.
+				GetBalance(
+					suite.
+						GetChain(ChainA).
+						GetContext(),
+					suite.
+						chainA.
+						SenderAccount.
+						GetAddress(),
+					suite.GetIBCDenomWithTrace("token0", ChainC, ChainA),
+				)
+
 			//suite.SimpleNativeTransfer("token0", osmomath.NewInt(defaultPoolAmount), []Chain{ChainC, ChainA})
 			suite.SimpleNativeTransfer("token0", osmomath.NewInt(5000), []Chain{ChainC, ChainA})
 			//suite.SimpleNativeTransfer("token0", osmomath.NewInt(100), []Chain{ChainC, ChainA, ChainB})
+
+			uusdcBalanceAfter := suite.
+				GetChain(ChainA).
+				GetOsmosisApp().
+				BankKeeper.
+				GetBalance(
+					suite.
+						GetChain(ChainA).
+						GetContext(),
+					suite.
+						chainA.
+						SenderAccount.
+						GetAddress(),
+					suite.GetIBCDenomWithTrace("token0", ChainC, ChainA),
+				)
+
+			suite.Require().True(uusdcBalanceAfter.Amount.Int64() - uusdcBalanceBefore.Amount.Int64() == 5000)
 
 			//denom := suite.GetIBCDenom(ChainC, ChainA, "token0")
 			denom := suite.GetIBCDenomWithTrace("token0", ChainC, ChainA)
@@ -1811,6 +1846,7 @@ func (suite *HooksTestSuite) TestBingBong() {
 		// Generate full memo
 		msg := fmt.Sprintf(`{"wasm": {"contract": "%s", "msg": %s } }`, crosschainAddr, swapMsg)
 		// Send IBC transfer with the memo with crosschain-swap instructions
+		// channel-1 = BtoC, AtoC, CtoA
 		transferMsg := NewMsgTransfer(sdk.NewCoin(initialToken, sendAmount), tc.sender.address.String(), crosschainAddr.String(), suite.GetSenderChannel(tc.sender.Chain, ChainA), msg)
 		_, res, _, err := suite.FullSend(transferMsg, BtoA)
 		// We use the receive result here because the receive adds another packet to be sent back
@@ -1825,7 +1861,8 @@ func (suite *HooksTestSuite) TestBingBong() {
 		suite.T().Logf("UUSDC balance before=%s after=%s", uusdcBalanceBefore, uusdcBalanceAfter)
 
 		suite.T().Log("Relaying packets...")
-		suite.T().Logf("Sending channel (A->B) = %s", suite.GetSenderChannel(ChainA, ChainB))
+		suite.T().Logf("Channels (A<->B) tx=%s rx=%s",
+			suite.GetSenderChannel(ChainA, ChainB), suite.GetReceiverChannel(ChainA, ChainB))
 
 		var ack []byte
 		for i, direction := range tc.relayChain {
