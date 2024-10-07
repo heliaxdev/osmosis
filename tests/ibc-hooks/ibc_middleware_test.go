@@ -1,6 +1,7 @@
 package ibc_hooks_test
 
 import (
+	"os"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -780,11 +781,18 @@ func (suite *HooksTestSuite) SetupCrosschainSwapsWithWasmBaseDir(wasmBaseDir str
 
 	suite.SetupPools(chainName, []osmomath.Dec{osmomath.NewDec(20), osmomath.NewDec(20)})
 
+	var wasmSuffix string
+	if suffix := os.Getenv("WASM_SUFFIX"); suffix != "" {
+		wasmSuffix = suffix
+	} else {
+		wasmSuffix = ".wasm"
+	}
+
 	// Setup contract
-	chain.StoreContractCode(&suite.Suite, fmt.Sprintf("%s/swaprouter.wasm", wasmBaseDir))
+	chain.StoreContractCode(&suite.Suite, fmt.Sprintf("%s/swaprouter%s", wasmBaseDir, wasmSuffix))
 	swaprouterAddr := chain.InstantiateContract(&suite.Suite,
 		fmt.Sprintf(`{"owner": "%s"}`, owner), 2)
-	chain.StoreContractCode(&suite.Suite, fmt.Sprintf("%s/crosschain_swaps.wasm", wasmBaseDir))
+	chain.StoreContractCode(&suite.Suite, fmt.Sprintf("%s/crosschain_swaps%s", wasmBaseDir, wasmSuffix))
 
 	crosschainAddr := chain.InstantiateContract(&suite.Suite,
 		fmt.Sprintf(`{"swap_contract": "%s", "governor": "%s", "registry_contract":"%s"}`, swaprouterAddr, owner, registryAddr),
@@ -839,8 +847,15 @@ func (suite *HooksTestSuite) SetupCrosschainRegistryWithWasmBaseDir(wasmBaseDir 
 	// Setup pools
 	suite.SetupPools(chainName, []osmomath.Dec{osmomath.NewDec(20), osmomath.NewDec(20)})
 
+	var wasmSuffix string
+	if suffix := os.Getenv("WASM_SUFFIX"); suffix != "" {
+		wasmSuffix = suffix
+	} else {
+		wasmSuffix = ".wasm"
+	}
+
 	// Setup contract
-	chain.StoreContractCode(&suite.Suite, fmt.Sprintf("%s/crosschain_registry.wasm", wasmBaseDir))
+	chain.StoreContractCode(&suite.Suite, fmt.Sprintf("%s/crosschain_registry%s", wasmBaseDir, wasmSuffix))
 	registryAddr := chain.InstantiateContract(&suite.Suite, fmt.Sprintf(`{"owner": "%s"}`, owner), 1)
 	_, err := sdk.Bech32ifyAddressBytes("osmo", registryAddr)
 	suite.Require().NoError(err)
